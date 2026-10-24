@@ -30,6 +30,7 @@ export default function PlayerPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [lyricsData, setLyricsData] = useState(null);
   const [showLyrics, setShowLyrics] = useState(true);
+  const [lyricsOffset, setLyricsOffset] = useState(0);
   const activeLyricRef = useRef(null);
 
   const audioRef = useRef(null);
@@ -386,6 +387,7 @@ export default function PlayerPage() {
 
     // Fetch live karaoke lyrics with metadata for maximum accuracy
     setLyricsData(null);
+    setLyricsOffset(0);
     const lyricsQuery = new URLSearchParams({
       duration: song.duration || 0,
       title: song.title || "",
@@ -786,11 +788,38 @@ export default function PlayerPage() {
               {/* VIEW B: Live Karaoke Lyrics Mode (Synced Highlight & Auto-scroll) */}
               {showLyrics && (
                 <div className="absolute inset-0 z-10 flex flex-col p-4 sm:p-6 pb-28 overflow-hidden bg-void/60 backdrop-blur-md">
-                  <div className="flex items-center justify-between mb-3 flex-shrink-0">
-                    <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-black/70 border border-neonPink/50 text-[11px] font-black text-neonPink uppercase tracking-wider shadow-lg">
-                      <Mic2 className="w-3.5 h-3.5 text-neonPink animate-pulse" />
-                      <span>{lyricsData?.type === "synced" ? "Live Karaoke" : "Official Lyrics"}</span>
-                    </span>
+                  <div className="flex items-center justify-between mb-3 flex-shrink-0 flex-wrap gap-2">
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-black/70 border border-neonPink/50 text-[11px] font-black text-neonPink uppercase tracking-wider shadow-lg">
+                        <Mic2 className="w-3.5 h-3.5 text-neonPink animate-pulse" />
+                        <span>Live Karaoke</span>
+                      </span>
+
+                      {/* Live Sync Offset Tuning (Fine-tune words to vocal) */}
+                      <div className="flex items-center space-x-1 bg-black/70 px-2.5 py-0.5 rounded-full border border-white/15 text-[10px]">
+                        <span className="text-mutedGray font-medium">จูน:</span>
+                        <button 
+                          onClick={() => setLyricsOffset(prev => Math.round((prev - 0.5) * 10) / 10)}
+                          className="px-1.5 py-0.5 bg-white/10 hover:bg-white/25 rounded-md font-mono text-white transition active:scale-90 font-bold"
+                          title="เลื่อนคำร้องเร็วขึ้น 0.5 วินาที"
+                        >-0.5s</button>
+                        <span className="font-mono text-cyberCyan font-black px-0.5">
+                          {lyricsOffset > 0 ? `+${lyricsOffset}s` : `${lyricsOffset}s`}
+                        </span>
+                        <button 
+                          onClick={() => setLyricsOffset(prev => Math.round((prev + 0.5) * 10) / 10)}
+                          className="px-1.5 py-0.5 bg-white/10 hover:bg-white/25 rounded-md font-mono text-white transition active:scale-90 font-bold"
+                          title="เลื่อนคำร้องช้าลง 0.5 วินาที"
+                        >+0.5s</button>
+                        {lyricsOffset !== 0 && (
+                          <button 
+                            onClick={() => setLyricsOffset(0)}
+                            className="text-neonPink hover:text-white px-1 text-[9px] font-bold underline"
+                          >รีเซ็ต</button>
+                        )}
+                      </div>
+                    </div>
+
                     <button
                       onClick={() => setShowLyrics(false)}
                       className="text-xs text-mutedGray hover:text-white px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 transition border border-white/10"
@@ -803,10 +832,9 @@ export default function PlayerPage() {
                     {!lyricsData ? (
                       <div className="h-full flex flex-col items-center justify-center text-center text-mutedGray space-y-2">
                         <div className="w-6 h-6 border-2 border-neonPink border-t-transparent rounded-full animate-spin"></div>
-                        <p className="text-xs font-semibold">กำลังโหลดเนื้อเพลง...</p>
+                        <p className="text-xs font-semibold">กำลังค้นหาเนื้อเพลงที่ตรงกับคำร้อง...</p>
                       </div>
                     ) : (() => {
-                      // Always obtain lines with timestamps, auto-generating timing if only text exists
                       let renderLines = lyricsData.lines || [];
                       if (renderLines.length === 0 && lyricsData.text) {
                         const raw = lyricsData.text.split("\n").map(l => l.trim()).filter(Boolean);
@@ -832,11 +860,12 @@ export default function PlayerPage() {
                         );
                       }
 
-                      const isBeforeIntro = renderLines.length > 0 && currentTime < renderLines[0].time;
+                      const effectiveTime = currentTime + lyricsOffset;
+                      const isBeforeIntro = renderLines.length > 0 && effectiveTime < renderLines[0].time;
 
                       return (
                         <>
-                          {/* Live Intro indicator if current time is before first vocal line */}
+                          {/* Live Intro indicator */}
                           {isBeforeIntro && (
                             <div className="py-2.5 px-4 mx-4 rounded-2xl bg-cyberCyan/20 border border-cyberCyan/40 text-cyberCyan text-xs font-black flex items-center justify-center space-x-2 animate-pulse shadow-lg shadow-cyan-500/20">
                               <Sparkles className="w-4 h-4 animate-spin text-cyberCyan" style={{ animationDuration: "4s" }} />
@@ -846,8 +875,8 @@ export default function PlayerPage() {
 
                           {renderLines.map((line, idx) => {
                             const nextLine = renderLines[idx + 1];
-                            const isActive = currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
-                            const isPast = nextLine && currentTime >= nextLine.time;
+                            const isActive = effectiveTime >= line.time && (!nextLine || effectiveTime < nextLine.time);
+                            const isPast = nextLine && effectiveTime >= nextLine.time;
 
                             return (
                               <div
@@ -862,7 +891,7 @@ export default function PlayerPage() {
                                 }`}
                               >
                                 {isActive && (
-                                  <span className="inline-block mr-2 w-2 h-2 rounded-full bg-neonPink animate-ping align-middle"></span>
+                                  <span className="inline-block mr-2 w-2.5 h-2.5 rounded-full bg-neonPink animate-ping align-middle"></span>
                                 )}
                                 {line.text}
                               </div>

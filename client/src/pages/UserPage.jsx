@@ -690,14 +690,14 @@ export default function UserPage() {
               {loadingLyrics ? (
                 <div className="py-16 flex flex-col items-center justify-center space-y-2 text-mutedGray">
                   <Loader2 className="w-6 h-6 text-neonPink animate-spin" />
-                  <p className="text-xs">กำลังดึงเนื้อเพลง...</p>
+                  <p className="text-xs">กำลังค้นหาเนื้อเพลงที่ตรงกับคำร้อง...</p>
                 </div>
               ) : !state.current_song ? (
                 <div className="py-16 text-center text-mutedGray text-xs">
                   ยังไม่มีเพลงที่กำลังเล่น
                 </div>
               ) : (() => {
-                let renderLines = userLyrics?.lines || [];
+                let renderLines = Array.isArray(userLyrics?.lines) ? userLyrics.lines : [];
                 if (renderLines.length === 0 && userLyrics?.text) {
                   const raw = userLyrics.text.split("\n").map(l => l.trim()).filter(Boolean);
                   const dur = state.current_song?.duration || 200;
@@ -722,20 +722,20 @@ export default function UserPage() {
                   );
                 }
 
-                const isBeforeIntro = renderLines.length > 0 && playbackTime < renderLines[0].time;
+                const curTime = Number(playbackTime) || 0;
+                const isBeforeIntro = renderLines.length > 0 && curTime < renderLines[0].time;
 
                 return (
                   <>
                     {/* Intro Indicator */}
                     {isBeforeIntro && (
                       <div className="py-2 px-3 mx-2 rounded-2xl bg-cyberCyan/20 border border-cyberCyan/40 text-cyberCyan text-xs font-bold flex items-center justify-center space-x-2 animate-pulse mb-3">
-                        <Sparkles className="w-3.5 h-3.5" />
+                        <Sparkles className="w-3.5 h-3.5 text-cyberCyan" />
                         <span>ดนตรีเริ่มเพลง (Intro)... ท่อนร้องกำลังจะมาถึง</span>
                       </div>
                     )}
 
                     {renderLines.map((line, idx) => {
-                      const curTime = playbackTime || 0;
                       const nextLine = renderLines[idx + 1];
                       const isActive = curTime >= line.time && (!nextLine || curTime < nextLine.time);
                       const isPast = nextLine && curTime >= nextLine.time;
