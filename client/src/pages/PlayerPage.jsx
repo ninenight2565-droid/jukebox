@@ -499,20 +499,40 @@ export default function PlayerPage() {
   };
 
   // User click to unlock autoplay audio permanently
-  const unlockAudio = () => {
-    initWebAudioDSP();
-    if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
-      audioCtxRef.current.resume();
-    }
-    const active = activeDeck.current === "A" ? audioA.current : audioB.current;
-    if (active) {
-      active.volume = state.master_volume ?? 1;
-      active.play().then(() => {
+  const unlockAudio = async () => {
+    try {
+      initWebAudioDSP();
+      if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
+        await audioCtxRef.current.resume();
+      }
+      
+      const deckA = audioA.current;
+      const deckB = audioB.current;
+      const active = activeDeck.current === "A" ? deckA : deckB;
+      const targetVol = state.master_volume ?? 1;
+
+      if (deckA) deckA.volume = targetVol;
+      if (deckB) deckB.volume = targetVol;
+
+      if (active && active.src) {
+        await active.play();
         setIsPlaying(true);
         setAutoplayBlocked(false);
-      }).catch((err) => {
-        console.error("Unlock error:", err);
-      });
+      } else {
+        // If current active has no src yet, force trigger streaming
+        if (state.current_song?.video_id) {
+          const res = await fetch(`/api/audio-url/${state.current_song.video_id}`);
+          const data = await res.json();
+          if (data.status === "success" && data.audio_url) {
+            crossfadeTo(data.audio_url);
+          }
+        }
+        setAutoplayBlocked(false);
+      }
+    } catch (err) {
+      console.warn("Unlock attempt:", err);
+      // Even if direct play was rejected, mark unblocked on user tap
+      setAutoplayBlocked(false);
     }
   };
 
@@ -633,14 +653,28 @@ export default function PlayerPage() {
         onEnded={() => handleAudioEnded("B")}
       />
 
-      {/* Autoplay Unlock Banner */}
+      {/* Full-Screen Click-to-Unlock Overlay (If Autoplay Blocked) */}
       {autoplayBlocked && (
         <div
           onClick={unlockAudio}
-          className="absolute inset-x-4 top-4 z-50 py-3 px-6 bg-gradient-to-r from-neonViolet via-neonPink to-cyberCyan text-white text-center font-bold text-sm shadow-2xl rounded-2xl cursor-pointer animate-pulse flex items-center justify-center space-x-2"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer p-6 animate-in fade-in duration-300"
         >
-          <Play className="w-4 h-4 fill-current" />
-          <span>แตะหน้าจอ 1 ครั้ง เพื่อเปิดเสียง (Tap once to enable sound)</span>
+          <div className="frosted-glass border-2 border-cyberCyan/60 rounded-3xl p-8 max-w-md text-center shadow-2xl neon-glow-cyan flex flex-col items-center space-y-4 hover:scale-105 transition active:scale-95">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-neonViolet via-neonPink to-cyberCyan flex items-center justify-center shadow-lg shadow-purple-500/40 animate-bounce">
+              <Play className="w-10 h-10 fill-white text-white ml-1" />
+            </div>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide">
+                แตะหน้าจอ 1 ครั้ง เพื่อเปิดเสียง
+              </h2>
+              <p className="text-sm text-cyberCyan font-semibold mt-1">
+                Tap anywhere on screen to enable audio
+              </p>
+            </div>
+            <p className="text-xs text-mutedGray leading-relaxed max-w-xs">
+              เบราว์เซอร์ต้องการการแตะ 1 ครั้ง เพื่ออนุญาตให้ระบบเริ่มเล่นเสียงออกลำโพง
+            </p>
+          </div>
         </div>
       )}
 
