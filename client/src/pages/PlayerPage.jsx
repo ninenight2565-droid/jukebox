@@ -5,7 +5,7 @@ import {
   Disc3, Scan, ListMusic, Play, Pause, Volume2, VolumeX, 
   Search, Users, Settings, Sparkles, ChevronRight, ChevronLeft,
   Radio, Maximize2, Minimize2, QrCode, RotateCcw, SkipForward, 
-  SlidersHorizontal, X, Music2
+  SlidersHorizontal, X, Music2, Mic2
 } from "lucide-react";
 
 const DEFAULT_COVER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600'%3E%3Crect width='600' height='600' fill='%23121216'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%238E8E93' dy='.3em' font-family='sans-serif' font-size='32'%3EWaiting for Music%3C/text%3E%3C/svg%3E";
@@ -28,6 +28,9 @@ export default function PlayerPage() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [lyricsData, setLyricsData] = useState(null);
+  const [showLyrics, setShowLyrics] = useState(true);
+  const activeLyricRef = useRef(null);
 
   const audioRef = useRef(null);
   const currentLoadedVideoId = useRef(null);
@@ -381,6 +384,21 @@ export default function PlayerPage() {
     if (currentLoadedVideoId.current === song.video_id) return;
     currentLoadedVideoId.current = song.video_id;
 
+    // Fetch live karaoke lyrics
+    setLyricsData(null);
+    fetch(`/api/lyrics/${song.video_id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === "success" && (data.lines?.length > 0 || data.text)) {
+          setLyricsData(data);
+        } else {
+          setLyricsData({ type: "none", message: "ไม่มีเนื้อเพลง" });
+        }
+      })
+      .catch(() => {
+        setLyricsData({ type: "none", message: "ไม่สามารถโหลดเนื้อเพลงได้" });
+      });
+
     const startStreaming = async () => {
       setAudioLoading(true);
       try {
@@ -430,6 +448,16 @@ export default function PlayerPage() {
 
   const lastReportedTime = useRef(0);
   const isTrimmingRef = useRef(false);
+
+  // Auto-scroll active lyric into view
+  useEffect(() => {
+    if (showLyrics && activeLyricRef.current) {
+      activeLyricRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [currentTime, showLyrics]);
 
   const handleTimeUpdate = (e) => {
     const active = activeDeck.current === "A" ? audioA.current : audioB.current;
@@ -679,6 +707,19 @@ export default function PlayerPage() {
             </div>
 
             <button
+              onClick={() => setShowLyrics(!showLyrics)}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-lg active:scale-95 ${
+                showLyrics 
+                  ? "bg-gradient-to-r from-neonPink/30 to-neonViolet/30 border-neonPink/60 text-white shadow-pink-500/15" 
+                  : "frosted-glass border-white/10 text-mutedGray hover:text-white"
+              }`}
+              title="เปิด/ปิด เนื้อเพลงคาราโอเกะ"
+            >
+              <Mic2 className={`w-3.5 h-3.5 ${showLyrics ? "text-neonPink animate-pulse" : "text-mutedGray"}`} />
+              <span className="hidden sm:inline">เนื้อเพลง</span>
+            </button>
+
+            <button
               onClick={() => setShowQrModal(true)}
               className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-neonViolet/30 to-cyberCyan/30 hover:from-neonViolet/50 hover:to-cyberCyan/50 border border-cyberCyan/50 text-white text-xs font-bold transition shadow-lg shadow-cyan-500/15 active:scale-95"
             >
@@ -702,7 +743,7 @@ export default function PlayerPage() {
           {/* LEFT COLUMN: HERO VINYL ARTWORK & ANIMATED CONTROLS */}
           <div className="w-full md:w-[48%] lg:w-[50%] flex flex-col justify-between space-y-3.5 h-full">
             
-            {/* Expanded Hero Artwork Card with Vinyl Aesthetic */}
+            {/* Expanded Hero Artwork Card with Vinyl Aesthetic & Live Karaoke Overlay */}
             <div className="relative flex-1 rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-cosmic group flex items-center justify-center min-h-[260px]">
               
               {/* Background Cover Blur */}
@@ -718,21 +759,81 @@ export default function PlayerPage() {
               />
               
               {/* Cyber Ambient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-void via-void/40 to-transparent"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-void via-void/50 to-void/30"></div>
 
-              {/* Animated Floating Vinyl Record in the Center (When Playing) */}
-              <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none p-4 text-center">
-                <div className={`w-36 h-36 sm:w-44 sm:h-44 lg:w-52 lg:h-52 rounded-full p-2 border-2 border-white/20 shadow-2xl bg-black/70 backdrop-blur-md flex items-center justify-center relative ${isPlaying ? "vinyl-spin" : ""}`}>
-                  <div className="absolute inset-2 rounded-full border border-dashed border-white/20"></div>
-                  <div className="absolute inset-8 rounded-full border border-white/15"></div>
-                  <img
-                    src={state.current_song ? state.current_song.thumbnail : DEFAULT_COVER}
-                    alt=""
-                    className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-full object-cover border-4 border-black/80 shadow-lg"
-                  />
-                  <div className="absolute w-4 h-4 bg-void border-2 border-cyberCyan rounded-full"></div>
+              {/* VIEW A: Normal Vinyl Center (When lyrics is off) */}
+              {!showLyrics && (
+                <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none p-4 text-center">
+                  <div className={`w-36 h-36 sm:w-44 sm:h-44 lg:w-52 lg:h-52 rounded-full p-2 border-2 border-white/20 shadow-2xl bg-black/70 backdrop-blur-md flex items-center justify-center relative ${isPlaying ? "vinyl-spin" : ""}`}>
+                    <div className="absolute inset-2 rounded-full border border-dashed border-white/20"></div>
+                    <div className="absolute inset-8 rounded-full border border-white/15"></div>
+                    <img
+                      src={state.current_song ? state.current_song.thumbnail : DEFAULT_COVER}
+                      alt=""
+                      className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-full object-cover border-4 border-black/80 shadow-lg"
+                    />
+                    <div className="absolute w-4 h-4 bg-void border-2 border-cyberCyan rounded-full"></div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* VIEW B: Live Karaoke Lyrics Mode (Synced Highlight & Auto-scroll) */}
+              {showLyrics && (
+                <div className="absolute inset-0 z-10 flex flex-col p-4 sm:p-6 pb-20 overflow-hidden">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-black/50 border border-neonPink/40 text-[10px] font-black text-neonPink uppercase tracking-wider backdrop-blur-md">
+                      <Mic2 className="w-3 h-3 text-neonPink animate-pulse" />
+                      <span>{lyricsData?.type === "synced" ? "Live Karaoke" : "Official Lyrics"}</span>
+                    </span>
+                    <button
+                      onClick={() => setShowLyrics(false)}
+                      className="text-[10px] text-mutedGray hover:text-white px-2 py-0.5 rounded-lg bg-black/40 hover:bg-black/60 transition"
+                    >
+                      สลับเป็นหน้าแผ่นเสียง
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2 scroll-smooth">
+                    {!lyricsData ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center text-mutedGray space-y-2">
+                        <div className="w-5 h-5 border-2 border-neonPink border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-xs font-semibold">กำลังโหลดเนื้อเพลง...</p>
+                      </div>
+                    ) : lyricsData.type === "synced" && lyricsData.lines?.length > 0 ? (
+                      lyricsData.lines.map((line, idx) => {
+                        const nextLine = lyricsData.lines[idx + 1];
+                        const isActive = currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
+                        const isPast = nextLine && currentTime >= nextLine.time;
+
+                        return (
+                          <div
+                            key={idx}
+                            ref={isActive ? activeLyricRef : null}
+                            className={`transition-all duration-300 py-1 px-3 rounded-xl cursor-default text-center ${
+                              isActive
+                                ? "text-base sm:text-lg md:text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-neonPink via-white to-cyberCyan scale-105 shadow-neon drop-shadow-[0_0_12px_rgba(255,42,109,0.8)] bg-white/10 border border-neonPink/30"
+                                : isPast
+                                ? "text-xs sm:text-sm font-semibold text-white/40"
+                                : "text-xs sm:text-sm font-semibold text-white/60 hover:text-white/80"
+                            }`}
+                          >
+                            {line.text}
+                          </div>
+                        );
+                      })
+                    ) : lyricsData.text ? (
+                      <div className="text-center space-y-2 whitespace-pre-line text-xs sm:text-sm font-medium text-white/85 leading-relaxed py-2">
+                        {lyricsData.text}
+                      </div>
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center text-mutedGray p-4">
+                        <Mic2 className="w-8 h-8 opacity-30 text-white mb-2" />
+                        <p className="text-xs font-bold text-white/70">ไม่มีเนื้อเพลงสำหรับเพลงนี้</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Bottom Song Details Pill */}
               <div className="absolute bottom-4 sm:bottom-6 inset-x-5 text-center z-10">

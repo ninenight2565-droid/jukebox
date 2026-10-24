@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import socket from "../socket";
 import { 
   Search, Disc3, Radio, Sparkles, Plus, Check, ListMusic, ArrowUpRight,
-  Compass, X, Loader2, Music
+  Compass, X, Loader2, Music, Mic2
 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -14,8 +14,11 @@ export default function UserPage() {
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [activeTab, setActiveTab] = useState("search"); // 'search' | 'queue'
+  const [activeTab, setActiveTab] = useState("search"); // 'search' | 'queue' | 'lyrics'
   const [justAddedId, setJustAddedId] = useState(null);
+  const [userLyrics, setUserLyrics] = useState(null);
+  const [loadingLyrics, setLoadingLyrics] = useState(false);
+  const userActiveLyricRef = useRef(null);
   const searchContainerRef = useRef(null);
 
   // Recommendations Modal & Infinite Scroll States
@@ -80,6 +83,38 @@ export default function UserPage() {
     socket.on("state:update", onStateUpdate);
     return () => socket.off("state:update", onStateUpdate);
   }, []);
+
+  // Fetch lyrics when current song changes
+  useEffect(() => {
+    if (!state.current_song?.video_id) {
+      setUserLyrics(null);
+      return;
+    }
+    setLoadingLyrics(true);
+    fetch(`/api/lyrics/${state.current_song.video_id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === "success" && (data.lines?.length > 0 || data.text)) {
+          setUserLyrics(data);
+        } else {
+          setUserLyrics({ type: "none", message: "ไม่มีเนื้อเพลง" });
+        }
+      })
+      .catch(() => {
+        setUserLyrics({ type: "none", message: "ไม่สามารถโหลดเนื้อเพลงได้" });
+      })
+      .finally(() => setLoadingLyrics(false));
+  }, [state.current_song?.video_id]);
+
+  // Auto-scroll synced lyric on user's phone
+  useEffect(() => {
+    if (activeTab === "lyrics" && userActiveLyricRef.current) {
+      userActiveLyricRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [state.current_time, activeTab]);
 
   // Close dropdown on click or touch outside (Mobile friendly)
   useEffect(() => {
@@ -368,7 +403,19 @@ export default function UserPage() {
             }`}
           >
             <ListMusic className="w-4 h-4" />
-            <span>คิวเพลงในห้อง ({state.queue.length})</span>
+            <span>คิว ({state.queue.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("lyrics")}
+            className={`flex-1 py-2.5 rounded-2xl text-xs font-extrabold transition flex items-center justify-center space-x-2 border ${
+              activeTab === "lyrics"
+                ? "bg-gradient-to-r from-neonPink/30 to-neonViolet/30 border-neonPink/60 text-white shadow-lg shadow-pink-500/15"
+                : "frosted-glass border-white/10 text-mutedGray hover:text-white"
+            }`}
+          >
+            <Mic2 className={`w-4 h-4 ${activeTab === "lyrics" ? "text-neonPink animate-pulse" : ""}`} />
+            <span>เนื้อเพลง</span>
           </button>
         </div>
 
@@ -392,7 +439,7 @@ export default function UserPage() {
 
       {/* Main Content Area */}
       <main className="max-w-md mx-auto p-4 space-y-4">
-        {activeTab === "search" ? (
+        {activeTab === "search" && (
           <>
             {/* Search Input with YouTube-style Dropdown */}
             <div ref={searchContainerRef} className="relative z-30">
@@ -529,8 +576,10 @@ export default function UserPage() {
               </div>
             )}
           </>
-        ) : (
-          /* Live Queue Tab */
+        )}
+
+        {/* Live Queue Tab */}
+        {activeTab === "queue" && (
           <div className="space-y-2.5">
             {state.queue.length === 0 ? (
               <div className="text-center py-16 frosted-glass rounded-3xl border border-dashed border-white/10 p-6 space-y-2">
@@ -598,6 +647,68 @@ export default function UserPage() {
                 );
               })
             )}
+          </div>
+        )}
+
+        {/* TAB 3: LIVE KARAOKE LYRICS TAB */}
+        {activeTab === "lyrics" && (
+          <div className="frosted-glass rounded-3xl p-4 sm:p-5 border border-white/10 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center space-x-2">
+                <Mic2 className="w-4 h-4 text-neonPink animate-pulse" />
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                  เนื้อเพลงสด (Karaoke Lyrics)
+                </h3>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-neonPink/20 text-neonPink border border-neonPink/30 font-bold">
+                {userLyrics?.type === "synced" ? "ซิงก์ตามเวลา" : "เนื้อเพลงทางการ"}
+              </span>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3.5 py-2 pr-1 text-center">
+              {loadingLyrics ? (
+                <div className="py-16 flex flex-col items-center justify-center space-y-2 text-mutedGray">
+                  <Loader2 className="w-6 h-6 text-neonPink animate-spin" />
+                  <p className="text-xs">กำลังดึงเนื้อเพลง...</p>
+                </div>
+              ) : !state.current_song ? (
+                <div className="py-16 text-center text-mutedGray text-xs">
+                  ยังไม่มีเพลงที่กำลังเล่น
+                </div>
+              ) : userLyrics?.type === "synced" && userLyrics.lines?.length > 0 ? (
+                userLyrics.lines.map((line, idx) => {
+                  const curTime = state.current_time || 0;
+                  const nextLine = userLyrics.lines[idx + 1];
+                  const isActive = curTime >= line.time && (!nextLine || curTime < nextLine.time);
+                  const isPast = nextLine && curTime >= nextLine.time;
+
+                  return (
+                    <div
+                      key={idx}
+                      ref={isActive ? userActiveLyricRef : null}
+                      className={`transition-all duration-300 py-1.5 px-3 rounded-2xl ${
+                        isActive
+                          ? "text-base sm:text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-neonPink via-white to-cyberCyan scale-105 bg-white/10 border border-neonPink/40 shadow-lg shadow-pink-500/20"
+                          : isPast
+                          ? "text-xs font-medium text-white/35"
+                          : "text-xs font-medium text-white/65"
+                      }`}
+                    >
+                      {line.text}
+                    </div>
+                  );
+                })
+              ) : userLyrics?.text ? (
+                <div className="whitespace-pre-line text-xs sm:text-sm font-medium text-white/85 leading-relaxed py-2">
+                  {userLyrics.text}
+                </div>
+              ) : (
+                <div className="py-16 flex flex-col items-center justify-center text-mutedGray space-y-2">
+                  <Mic2 className="w-8 h-8 opacity-25 text-white" />
+                  <p className="text-xs text-white/70">ไม่พบเนื้อเพลงสำหรับเพลงนี้</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>

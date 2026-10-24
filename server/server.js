@@ -229,6 +229,18 @@ app.get("/api/recommendations", async (req, res) => {
   }
 });
 
+const { getLyrics } = require("./lyricsService");
+
+// Lyrics Endpoint (Synced Timestamps + Fallback Static)
+app.get("/api/lyrics/:videoId", async (req, res) => {
+  try {
+    const data = await getLyrics(req.params.videoId);
+    res.json({ status: "success", ...data });
+  } catch (err) {
+    res.status(500).json({ status: "error", type: "none", message: err.message });
+  }
+});
+
 app.get("/api/audio-url/:videoId", async (req, res) => {
   try {
     const directUrl = await getDirectAudioUrl(req.params.videoId);
