@@ -37,11 +37,17 @@ def fetch_lyrics(video_id):
                         for ev in data.get('events', []):
                             if 'segs' in ev:
                                 text = ''.join(s.get('utf8', '') for s in ev['segs']).strip()
-                                # Clean up noise
+                                # Clean up noise but preserve complete words
                                 text = text.replace('\n', ' ').strip()
-                                if text and not text.startswith('[') and not text.endswith(']'):
+                                # Only skip empty or purely technical tags
+                                if text and not (text.startswith('[') and text.endswith(']') and len(text) < 15):
                                     start_sec = ev.get('tStartMs', 0) / 1000.0
-                                    lines.append({'time': round(start_sec, 2), 'text': text})
+                                    duration_sec = ev.get('dDurationMs', 3000) / 1000.0
+                                    lines.append({
+                                        'time': round(start_sec, 2), 
+                                        'duration': round(duration_sec, 2),
+                                        'text': text
+                                    })
                         if len(lines) >= 3:
                             result = {"type": "synced", "lines": lines, "text": "\n".join(l['text'] for l in lines)}
                             print(json.dumps(result, ensure_ascii=False))

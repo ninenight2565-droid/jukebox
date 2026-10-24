@@ -395,8 +395,8 @@ io.on("connection", (socket) => {
   // Player report current time & duration back to server
   socket.on("player:progress", (data) => {
     queueManager.setProgress(data.currentTime, data.duration);
-    // Broadcast progress to admin
-    socket.broadcast.emit("playback:progress", {
+    // Broadcast real-time progress to ALL connected clients (Admin + Users for live lyrics sync)
+    io.emit("playback:progress", {
       currentTime: data.currentTime,
       duration: data.duration,
     });

@@ -75,13 +75,28 @@ export default function UserPage() {
     queue: [],
   });
 
+  const [playbackTime, setPlaybackTime] = useState(0);
+
   useEffect(() => {
     const onStateUpdate = (newState) => {
       setState(newState);
+      if (typeof newState.current_time === "number") {
+        setPlaybackTime(newState.current_time);
+      }
+    };
+
+    const onProgress = (data) => {
+      if (typeof data.currentTime === "number") {
+        setPlaybackTime(data.currentTime);
+      }
     };
 
     socket.on("state:update", onStateUpdate);
-    return () => socket.off("state:update", onStateUpdate);
+    socket.on("playback:progress", onProgress);
+    return () => {
+      socket.off("state:update", onStateUpdate);
+      socket.off("playback:progress", onProgress);
+    };
   }, []);
 
   // Fetch lyrics when current song changes
@@ -114,7 +129,7 @@ export default function UserPage() {
         block: "center",
       });
     }
-  }, [state.current_time, activeTab]);
+  }, [playbackTime, activeTab]);
 
   // Close dropdown on click or touch outside (Mobile friendly)
   useEffect(() => {
@@ -677,7 +692,7 @@ export default function UserPage() {
                 </div>
               ) : userLyrics?.type === "synced" && userLyrics.lines?.length > 0 ? (
                 userLyrics.lines.map((line, idx) => {
-                  const curTime = state.current_time || 0;
+                  const curTime = playbackTime || 0;
                   const nextLine = userLyrics.lines[idx + 1];
                   const isActive = curTime >= line.time && (!nextLine || curTime < nextLine.time);
                   const isPast = nextLine && curTime >= nextLine.time;
@@ -686,12 +701,12 @@ export default function UserPage() {
                     <div
                       key={idx}
                       ref={isActive ? userActiveLyricRef : null}
-                      className={`transition-all duration-300 py-1.5 px-3 rounded-2xl ${
+                      className={`transition-all duration-300 py-2 px-3 rounded-2xl ${
                         isActive
-                          ? "text-base sm:text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-neonPink via-white to-cyberCyan scale-105 bg-white/10 border border-neonPink/40 shadow-lg shadow-pink-500/20"
+                          ? "text-lg sm:text-xl font-black text-white bg-gradient-to-r from-neonPink/30 via-neonViolet/30 to-cyberCyan/30 scale-105 border-2 border-neonPink shadow-lg shadow-pink-500/30"
                           : isPast
-                          ? "text-xs font-medium text-white/35"
-                          : "text-xs font-medium text-white/65"
+                          ? "text-xs font-semibold text-white/30"
+                          : "text-xs font-semibold text-white/60"
                       }`}
                     >
                       {line.text}
