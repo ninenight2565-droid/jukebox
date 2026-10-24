@@ -1,0 +1,24 @@
+{
+  "room_name": "Restaurant Jukebox",
+  "max_duration_sec": 360,
+  "blacklist_keywords": [
+    "10 hour",
+    "1 hour",
+    "สารคดี",
+    "ธรณีกันแสง",
+    "earrape",
+    "bass boosted"
+  ],
+  "auto_house_music": true,
+  "house_genre": "เพลงชิล acoustic ฟังสบาย ร้านอาหาร",
+  "smart_ai_dj": true,
+  "bg_mode": "custom_image",
+  "bg_custom_url": "/uploads/custom_background.jpg?v=1789820578497",
+  "master_volume": 1,
+  "harmonic_bass": false,
+  "bass_boost_enabled": false,
+  "bass_boost_freq": 50,
+  "bass_boost_gain": 6,
+  "loudness_normalizer": false,
+  "silence_trimmer": true
+}
