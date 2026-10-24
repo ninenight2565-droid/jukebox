@@ -106,7 +106,13 @@ export default function UserPage() {
       return;
     }
     setLoadingLyrics(true);
-    fetch(`/api/lyrics/${state.current_song.video_id}`)
+    const query = new URLSearchParams({
+      duration: state.current_song.duration || 0,
+      title: state.current_song.title || "",
+      artist: state.current_song.artist || ""
+    }).toString();
+
+    fetch(`/api/lyrics/${state.current_song.video_id}?${query}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.status === "success" && (data.lines?.length > 0 || data.text)) {
@@ -690,39 +696,72 @@ export default function UserPage() {
                 <div className="py-16 text-center text-mutedGray text-xs">
                   ยังไม่มีเพลงที่กำลังเล่น
                 </div>
-              ) : userLyrics?.type === "synced" && userLyrics.lines?.length > 0 ? (
-                userLyrics.lines.map((line, idx) => {
-                  const curTime = playbackTime || 0;
-                  const nextLine = userLyrics.lines[idx + 1];
-                  const isActive = curTime >= line.time && (!nextLine || curTime < nextLine.time);
-                  const isPast = nextLine && curTime >= nextLine.time;
+              ) : (() => {
+                let renderLines = userLyrics?.lines || [];
+                if (renderLines.length === 0 && userLyrics?.text) {
+                  const raw = userLyrics.text.split("\n").map(l => l.trim()).filter(Boolean);
+                  const dur = state.current_song?.duration || 200;
+                  const intro = Math.min(18, Math.max(10, dur * 0.08));
+                  const windowDur = Math.max(20, dur - intro - 12);
+                  const totalChars = raw.reduce((sum, l) => sum + Math.max(4, l.length), 0);
+                  let cur = intro;
+                  renderLines = raw.map(l => {
+                    const lineDur = (Math.max(4, l.length) / totalChars) * windowDur;
+                    const item = { time: Math.round(cur * 100) / 100, text: l };
+                    cur += lineDur;
+                    return item;
+                  });
+                }
 
+                if (renderLines.length === 0) {
                   return (
-                    <div
-                      key={idx}
-                      ref={isActive ? userActiveLyricRef : null}
-                      className={`transition-all duration-300 py-2 px-3 rounded-2xl ${
-                        isActive
-                          ? "text-lg sm:text-xl font-black text-white bg-gradient-to-r from-neonPink/30 via-neonViolet/30 to-cyberCyan/30 scale-105 border-2 border-neonPink shadow-lg shadow-pink-500/30"
-                          : isPast
-                          ? "text-xs font-semibold text-white/30"
-                          : "text-xs font-semibold text-white/60"
-                      }`}
-                    >
-                      {line.text}
+                    <div className="py-16 flex flex-col items-center justify-center text-mutedGray space-y-2">
+                      <Mic2 className="w-8 h-8 opacity-25 text-white" />
+                      <p className="text-xs text-white/70">ไม่พบเนื้อเพลงสำหรับเพลงนี้</p>
                     </div>
                   );
-                })
-              ) : userLyrics?.text ? (
-                <div className="whitespace-pre-line text-xs sm:text-sm font-medium text-white/85 leading-relaxed py-2">
-                  {userLyrics.text}
-                </div>
-              ) : (
-                <div className="py-16 flex flex-col items-center justify-center text-mutedGray space-y-2">
-                  <Mic2 className="w-8 h-8 opacity-25 text-white" />
-                  <p className="text-xs text-white/70">ไม่พบเนื้อเพลงสำหรับเพลงนี้</p>
-                </div>
-              )}
+                }
+
+                const isBeforeIntro = renderLines.length > 0 && playbackTime < renderLines[0].time;
+
+                return (
+                  <>
+                    {/* Intro Indicator */}
+                    {isBeforeIntro && (
+                      <div className="py-2 px-3 mx-2 rounded-2xl bg-cyberCyan/20 border border-cyberCyan/40 text-cyberCyan text-xs font-bold flex items-center justify-center space-x-2 animate-pulse mb-3">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>ดนตรีเริ่มเพลง (Intro)... ท่อนร้องกำลังจะมาถึง</span>
+                      </div>
+                    )}
+
+                    {renderLines.map((line, idx) => {
+                      const curTime = playbackTime || 0;
+                      const nextLine = renderLines[idx + 1];
+                      const isActive = curTime >= line.time && (!nextLine || curTime < nextLine.time);
+                      const isPast = nextLine && curTime >= nextLine.time;
+
+                      return (
+                        <div
+                          key={idx}
+                          ref={isActive ? userActiveLyricRef : null}
+                          className={`transition-all duration-300 py-2.5 px-3 rounded-2xl ${
+                            isActive
+                              ? "text-lg sm:text-xl font-black text-white bg-gradient-to-r from-neonPink/40 via-neonViolet/40 to-cyberCyan/40 scale-105 border-2 border-neonPink shadow-[0_0_20px_rgba(255,42,109,0.5)]"
+                              : isPast
+                              ? "text-xs font-semibold text-white/30"
+                              : "text-xs font-semibold text-white/65"
+                          }`}
+                        >
+                          {isActive && (
+                            <span className="inline-block mr-1.5 w-2 h-2 rounded-full bg-neonPink animate-ping align-middle"></span>
+                          )}
+                          {line.text}
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

@@ -234,7 +234,18 @@ const { getLyrics } = require("./lyricsService");
 // Lyrics Endpoint (Synced Timestamps + Fallback Static)
 app.get("/api/lyrics/:videoId", async (req, res) => {
   try {
-    const data = await getLyrics(req.params.videoId);
+    const videoId = req.params.videoId;
+    let duration = req.query.duration;
+    let title = req.query.title;
+    let artist = req.query.artist;
+
+    if (queueManager.currentSong && queueManager.currentSong.video_id === videoId) {
+      duration = duration || queueManager.currentSong.duration;
+      title = title || queueManager.currentSong.title;
+      artist = artist || queueManager.currentSong.artist;
+    }
+
+    const data = await getLyrics(videoId, duration, title, artist);
     res.json({ status: "success", ...data });
   } catch (err) {
     res.status(500).json({ status: "error", type: "none", message: err.message });

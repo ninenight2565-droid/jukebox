@@ -3,7 +3,7 @@ const path = require("path");
 
 const lyricsCache = new Map();
 
-function getLyrics(videoId) {
+function getLyrics(videoId, duration = 0, title = "", artist = "") {
   return new Promise((resolve) => {
     if (!videoId) {
       return resolve({ type: "none", message: "No video_id provided" });
@@ -14,7 +14,8 @@ function getLyrics(videoId) {
     }
 
     const scriptPath = path.join(__dirname, "lyricsExtractor.py");
-    const py = spawn("python", [scriptPath, videoId]);
+    const args = [scriptPath, videoId, String(duration || 0), String(title || ""), String(artist || "")];
+    const py = spawn("python", args);
 
     let output = "";
     py.stdout.on("data", (data) => {

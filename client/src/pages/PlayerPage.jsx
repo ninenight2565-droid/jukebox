@@ -384,9 +384,15 @@ export default function PlayerPage() {
     if (currentLoadedVideoId.current === song.video_id) return;
     currentLoadedVideoId.current = song.video_id;
 
-    // Fetch live karaoke lyrics
+    // Fetch live karaoke lyrics with metadata for maximum accuracy
     setLyricsData(null);
-    fetch(`/api/lyrics/${song.video_id}`)
+    const lyricsQuery = new URLSearchParams({
+      duration: song.duration || 0,
+      title: song.title || "",
+      artist: song.artist || ""
+    }).toString();
+
+    fetch(`/api/lyrics/${song.video_id}?${lyricsQuery}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.status === "success" && (data.lines?.length > 0 || data.text)) {
@@ -799,38 +805,72 @@ export default function PlayerPage() {
                         <div className="w-6 h-6 border-2 border-neonPink border-t-transparent rounded-full animate-spin"></div>
                         <p className="text-xs font-semibold">กำลังโหลดเนื้อเพลง...</p>
                       </div>
-                    ) : lyricsData.type === "synced" && lyricsData.lines?.length > 0 ? (
-                      lyricsData.lines.map((line, idx) => {
-                        const nextLine = lyricsData.lines[idx + 1];
-                        const isActive = currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
-                        const isPast = nextLine && currentTime >= nextLine.time;
+                    ) : (() => {
+                      // Always obtain lines with timestamps, auto-generating timing if only text exists
+                      let renderLines = lyricsData.lines || [];
+                      if (renderLines.length === 0 && lyricsData.text) {
+                        const raw = lyricsData.text.split("\n").map(l => l.trim()).filter(Boolean);
+                        const dur = duration || state.current_song?.duration || 200;
+                        const intro = Math.min(18, Math.max(10, dur * 0.08));
+                        const windowDur = Math.max(20, dur - intro - 12);
+                        const totalChars = raw.reduce((sum, l) => sum + Math.max(4, l.length), 0);
+                        let cur = intro;
+                        renderLines = raw.map(l => {
+                          const lineDur = (Math.max(4, l.length) / totalChars) * windowDur;
+                          const item = { time: Math.round(cur * 100) / 100, text: l };
+                          cur += lineDur;
+                          return item;
+                        });
+                      }
 
+                      if (renderLines.length === 0) {
                         return (
-                          <div
-                            key={idx}
-                            ref={isActive ? activeLyricRef : null}
-                            className={`transition-all duration-300 py-2 px-4 rounded-2xl cursor-default text-center ${
-                              isActive
-                                ? "text-xl sm:text-2xl md:text-3xl font-black text-white scale-105 bg-gradient-to-r from-neonPink/30 via-neonViolet/30 to-cyberCyan/30 border-2 border-neonPink shadow-2xl shadow-pink-500/40 drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]"
-                                : isPast
-                                ? "text-sm sm:text-base font-semibold text-white/35 drop-shadow"
-                                : "text-sm sm:text-base font-semibold text-white/65 drop-shadow"
-                            }`}
-                          >
-                            {line.text}
+                          <div className="h-full flex flex-col items-center justify-center text-center text-mutedGray p-4">
+                            <Mic2 className="w-8 h-8 opacity-30 text-white mb-2" />
+                            <p className="text-xs font-bold text-white/70">ไม่มีเนื้อเพลงสำหรับเพลงนี้</p>
                           </div>
                         );
-                      })
-                    ) : lyricsData.text ? (
-                      <div className="text-center space-y-2.5 whitespace-pre-line text-sm sm:text-base font-semibold text-white/90 leading-relaxed py-2 drop-shadow">
-                        {lyricsData.text}
-                      </div>
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-center text-mutedGray p-4">
-                        <Mic2 className="w-8 h-8 opacity-30 text-white mb-2" />
-                        <p className="text-xs font-bold text-white/70">ไม่มีเนื้อเพลงสำหรับเพลงนี้</p>
-                      </div>
-                    )}
+                      }
+
+                      const isBeforeIntro = renderLines.length > 0 && currentTime < renderLines[0].time;
+
+                      return (
+                        <>
+                          {/* Live Intro indicator if current time is before first vocal line */}
+                          {isBeforeIntro && (
+                            <div className="py-2.5 px-4 mx-4 rounded-2xl bg-cyberCyan/20 border border-cyberCyan/40 text-cyberCyan text-xs font-black flex items-center justify-center space-x-2 animate-pulse shadow-lg shadow-cyan-500/20">
+                              <Sparkles className="w-4 h-4 animate-spin text-cyberCyan" style={{ animationDuration: "4s" }} />
+                              <span>ดนตรีเริ่มเพลง (Intro)... ท่อนร้องกำลังจะมาถึง</span>
+                            </div>
+                          )}
+
+                          {renderLines.map((line, idx) => {
+                            const nextLine = renderLines[idx + 1];
+                            const isActive = currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
+                            const isPast = nextLine && currentTime >= nextLine.time;
+
+                            return (
+                              <div
+                                key={idx}
+                                ref={isActive ? activeLyricRef : null}
+                                className={`transition-all duration-300 py-2.5 px-4 rounded-2xl cursor-default text-center ${
+                                  isActive
+                                    ? "text-xl sm:text-2xl md:text-3xl font-black text-white scale-105 bg-gradient-to-r from-neonPink/40 via-neonViolet/40 to-cyberCyan/40 border-2 border-neonPink shadow-[0_0_30px_rgba(255,42,109,0.6)] drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]"
+                                    : isPast
+                                    ? "text-sm sm:text-base font-semibold text-white/35"
+                                    : "text-sm sm:text-base font-semibold text-white/70 hover:text-white"
+                                }`}
+                              >
+                                {isActive && (
+                                  <span className="inline-block mr-2 w-2 h-2 rounded-full bg-neonPink animate-ping align-middle"></span>
+                                )}
+                                {line.text}
+                              </div>
+                            );
+                          })}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
