@@ -9,7 +9,7 @@ echo.
 cd /d "%~dp0"
 
 if not exist "server" (
-    echo [ERROR] 'server' folder not found!
+    echo [ERROR] server folder not found!
     echo Please place this batch file in the root project directory.
     echo.
     pause
@@ -17,15 +17,12 @@ if not exist "server" (
 )
 
 echo [1/3] Checking Port 8888...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8888 ^| findstr LISTENING') do (
-    echo Terminating old process on port 8888 (PID: %%a)...
-    taskkill /F /PID %%a >nul 2>&1
-)
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8888 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
 
 echo [2/3] Starting Server...
-start "Jukebox Server" cmd /k "cd /d server && node server.js"
+start "Jukebox Server" cmd /k "cd /d ""%~dp0server"" && node server.js"
 
-timeout /t 3 /nobreak >nul
+ping 127.0.0.1 -n 3 >nul
 
 echo [3/3] Launching Player TV Dashboard...
 start http://localhost:8888/player
